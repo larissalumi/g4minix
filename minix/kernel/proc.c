@@ -1604,7 +1604,7 @@ void enqueue(
  * This function can be used x-cpu as it always uses the queues of the cpu the
  * process is assigned to.
  */
-  int q = rp->p_priority;	 		/* scheduling queue to use */
+  int q = 0;	 		/* todos os processos na mesma fila*/
   struct proc **rdy_head, **rdy_tail;
   
   assert(proc_is_runnable(rp));
@@ -1624,20 +1624,22 @@ void enqueue(
       rdy_tail[q] = rp;				/* set new queue tail */
       rp->p_nextready = NULL;		/* mark new end */
   }
-
-  if (cpuid == rp->p_cpu) {
+ 
+ // if (cpuid == rp->p_cpu) {
 	  /*
 	   * enqueueing a process with a higher priority than the current one,
 	   * it gets preempted. The current process must be preemptible. Testing
 	   * the priority also makes sure that a process does not preempt itself
 	   */
-	  struct proc * p;
-	  p = get_cpulocal_var(proc_ptr);
-	  assert(p);
-	  if((p->p_priority > rp->p_priority) &&
-			  (priv(p)->s_flags & PREEMPTIBLE))
-		  RTS_SET(p, RTS_PREEMPTED); /* calls dequeue() */
-  }
+	//  struct proc * p;
+	//  p = get_cpulocal_var(proc_ptr);
+	// assert(p);
+	//  if((p->p_priority > rp->p_priority) &&
+	//		  (priv(p)->s_flags & PREEMPTIBLE))
+	//	  RTS_SET(p, RTS_PREEMPTED); /* calls dequeue() */
+    // }
+   
+	
 #ifdef CONFIG_SMP
   /*
    * if the process was enqueued on a different cpu and the cpu is idle, i.e.
@@ -1669,7 +1671,7 @@ void enqueue(
  */
 static void enqueue_head(struct proc *rp)
 {
-  const int q = rp->p_priority;	 		/* scheduling queue to use */
+  const int q = 0;	 	
 
   struct proc **rdy_head, **rdy_tail;
 
@@ -1799,17 +1801,19 @@ static struct proc * pick_proc(void)
    * If there are no processes ready to run, return NULL.
    */
   rdy_head = get_cpulocal_var(run_q_head);
-  for (q=0; q < NR_SCHED_QUEUES; q++) {	
-	if(!(rp = rdy_head[q])) {
-		TRACE(VF_PICKPROC, printf("cpu %d queue %d empty\n", cpuid, q););
-		continue;
-	}
-	assert(proc_is_runnable(rp));
-	if (priv(rp)->s_flags & BILLABLE)	 	
-		get_cpulocal_var(bill_ptr) = rp; /* bill for system time */
-	return rp;
-  }
-  return NULL;
+ q = 0;
+
+ rp = rdy_head[q];
+
+ if (!rp)
+    return NULL;
+
+ assert(proc_is_runnable(rp));
+
+ if (priv(rp)->s_flags & BILLABLE)
+    get_cpulocal_var(bill_ptr) = rp;
+
+  return rp;
 }
 
 /*===========================================================================*
