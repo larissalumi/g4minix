@@ -38,7 +38,7 @@ static int schedule_process(struct schedproc * rmp, unsigned flags);
 
 #define cpu_is_available(c)	(cpu_proc[c] >= 0)
 
-#define DEFAULT_USER_TIME_SLICE 200
+#define DEFAULT_USER_TIME_SLICE 999999
 
 /* processes created by RS are sysytem processes */
 #define is_system_proc(p)	((p)->parent == RS_PROC_NR)
@@ -96,13 +96,11 @@ int do_noquantum(message *m_ptr)
 	}
 
 	rmp = &schedproc[proc_nr_n];
-	if (rmp->priority < MIN_USER_Q) {
-		rmp->priority += 1; /* lower priority */
-	}
-
+	// não muda prioridade 
 	if ((rv = schedule_process_local(rmp)) != OK) {
-		return rv;
-	}
+        return rv;
+    }
+	
 	return OK;
 }
 
@@ -299,7 +297,7 @@ static int schedule_process(struct schedproc * rmp, unsigned flags)
 	int err;
 	int new_prio, new_quantum, new_cpu, niced;
 
-	pick_cpu(rmp);
+	//pick_cpu(rmp);
 
 	if (flags & SCHEDULE_CHANGE_PRIO)
 		new_prio = rmp->priority;
@@ -352,18 +350,13 @@ void init_scheduling(void)
  */
 void balance_queues(void)
 {
-	struct schedproc *rmp;
-	int r, proc_nr;
-
-	for (proc_nr=0, rmp=schedproc; proc_nr < NR_PROCS; proc_nr++, rmp++) {
-		if (rmp->flags & IN_USE) {
-			if (rmp->priority > rmp->max_priority) {
-				rmp->priority -= 1; /* increase priority */
-				schedule_process_local(rmp);
-			}
-		}
-	}
-
-	if ((r = sys_setalarm(balance_timeout, 0)) != OK)
-		panic("sys_setalarm failed: %d", r);
 }
+
+
+
+
+
+
+
+
+
