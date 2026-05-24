@@ -1625,19 +1625,19 @@ void enqueue(
       rp->p_nextready = NULL;		/* mark new end */
   }
  
- // if (cpuid == rp->p_cpu) {
+  if (cpuid == rp->p_cpu) {
 	  /*
 	   * enqueueing a process with a higher priority than the current one,
 	   * it gets preempted. The current process must be preemptible. Testing
 	   * the priority also makes sure that a process does not preempt itself
 	   */
-	//  struct proc * p;
-	//  p = get_cpulocal_var(proc_ptr);
-	// assert(p);
-	//  if((p->p_priority > rp->p_priority) &&
-	//		  (priv(p)->s_flags & PREEMPTIBLE))
-	//	  RTS_SET(p, RTS_PREEMPTED); /* calls dequeue() */
-    // }
+	  struct proc * p;
+	  p = get_cpulocal_var(proc_ptr);
+	 assert(p);
+	  if((p->p_priority > rp->p_priority) &&
+			  (priv(p)->s_flags & PREEMPTIBLE))
+		  RTS_SET(p, RTS_PREEMPTED); /* calls dequeue() */
+ }
    
 	
 #ifdef CONFIG_SMP
@@ -1725,7 +1725,7 @@ void dequeue(struct proc *rp)
  * This function can operate x-cpu as it always removes the process from the
  * queue of the cpu the process is currently assigned to.
  */
-  int q = rp->p_priority;		/* queue to use */
+  int q = 0;		
   struct proc **xpp;			/* iterate over queue */
   struct proc *prev_xp;
   u64_t tsc, tsc_delta;
@@ -1805,7 +1805,11 @@ static struct proc * pick_proc(void)
 
  rp = rdy_head[q];
 
- if (!rp)
+while (rp != NULL && !proc_is_runnable(rp)) {
+    rp = rp->p_nextready;
+}
+
+ if (rp == NULL)
     return NULL;
 
  assert(proc_is_runnable(rp));
