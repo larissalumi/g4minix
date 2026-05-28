@@ -252,6 +252,7 @@ int pm_exec(vir_bytes path, size_t path_len, vir_bytes frame, size_t frame_len,
    * It reads the start of the file.
    */
   Get_read_vp(execi, fullpath, 1, 1, &resolve, fp);
+  printf("Executando: %s\n", fullpath);
 
   /* If this is a script (i.e. has a #!/interpreter line),
    * retrieve the name of the interpreter and open that
