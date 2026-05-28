@@ -41,6 +41,28 @@
 
 #include <minix/syslib.h>
 
+#define LOTTERY_BASE_TICKETS 10
+
+static unsigned int lottery_seed = 123456789;
+
+static unsigned int lottery_random(unsigned int max)
+{
+    lottery_seed = lottery_seed * 1103515245 + 12345;
+    return (lottery_seed >> 16) % max;
+}
+
+static unsigned int lottery_tickets(struct proc *rp)
+{
+    int q;
+
+    q = rp->p_priority;
+
+    if (q < USER_Q || q > MIN_USER_Q)
+        return 0;
+
+    return (MIN_USER_Q - q + 1) * LOTTERY_BASE_TICKETS;
+}
+
 /* Scheduling and message passing functions */
 static void idle(void);
 /**
@@ -1784,31 +1806,103 @@ void dequeue(struct proc *rp)
  *===========================================================================*/
 static struct proc * pick_proc(void)
 {
-/* Decide who to run now.  A new process is selected and returned.
- * When a billable process is selected, record it in 'bill_ptr', so that the 
+/* Decide who to run now. A new process is selected and returned.
+ * When a billable process is selected, record it in 'bill_ptr', so that the
  * clock task can tell who to bill for system time.
+ *
+ * Lottery Scheduling:
+ * - System queues are preserved with the original MINIX behavior.
+ * - User queues, from USER_Q to MIN_USER_Q, are selected by lottery.
+ * - Lower-priority user processes receive fewer tickets.
  *
  * This function always uses the run queues of the local cpu!
  */
-  register struct proc *rp;			/* process to run */
+  register struct proc *rp;             /* process to run */
   struct proc **rdy_head;
-  int q;				/* iterate over queues */
+  int q;                                /* iterate over queues */
+  unsigned int total_tickets;
+  unsigned int winner;
+  unsigned int counter;
 
-  /* Check each of the scheduling queues for ready processes. The number of
-   * queues is defined in proc.h, and priorities are set in the task table.
-   * If there are no processes ready to run, return NULL.
-   */
   rdy_head = get_cpulocal_var(run_q_head);
-  for (q=0; q < NR_SCHED_QUEUES; q++) {	
-	if(!(rp = rdy_head[q])) {
+
+  /*
+   * First, preserve the original behavior for system queues.
+   * Queues before USER_Q contain kernel/system processes and critical servers.
+   * These processes should not be selected randomly, otherwise the system may
+   * become unstable.
+   */
+  for (q = 0; q < USER_Q; q++) {
+	if (!(rp = rdy_head[q])) {
 		TRACE(VF_PICKPROC, printf("cpu %d queue %d empty\n", cpuid, q););
 		continue;
 	}
+
 	assert(proc_is_runnable(rp));
-	if (priv(rp)->s_flags & BILLABLE)	 	
+
+	if (priv(rp)->s_flags & BILLABLE)
 		get_cpulocal_var(bill_ptr) = rp; /* bill for system time */
+
 	return rp;
   }
+
+  /*
+   * Lottery Scheduling for user processes.
+   * The user queues are between USER_Q and MIN_USER_Q.
+   * First pass: sum the tickets of all runnable user processes.
+   */
+  total_tickets = 0;
+
+  for (q = USER_Q; q <= MIN_USER_Q; q++) {
+	for (rp = rdy_head[q]; rp != NULL; rp = rp->p_nextready) {
+		assert(proc_is_runnable(rp));
+		total_tickets += lottery_tickets(rp);
+	}
+  }
+
+  /*
+   * If there are user processes ready, draw a winning ticket.
+   * Then scan the queues again until the process that owns the winning ticket
+   * range is found.
+   */
+  if (total_tickets > 0) {
+	winner = lottery_random(total_tickets);
+	counter = 0;
+
+	for (q = USER_Q; q <= MIN_USER_Q; q++) {
+		for (rp = rdy_head[q]; rp != NULL; rp = rp->p_nextready) {
+			counter += lottery_tickets(rp);
+
+			if (winner < counter) {
+				assert(proc_is_runnable(rp));
+
+				if (priv(rp)->s_flags & BILLABLE)
+					get_cpulocal_var(bill_ptr) = rp;
+
+				return rp;
+			}
+		}
+	}
+  }
+
+  /*
+   * Fallback for remaining queues, including IDLE_Q.
+   * This keeps the original behavior if no user process is runnable.
+   */
+  for (q = MIN_USER_Q + 1; q < NR_SCHED_QUEUES; q++) {
+	if (!(rp = rdy_head[q])) {
+		TRACE(VF_PICKPROC, printf("cpu %d queue %d empty\n", cpuid, q););
+		continue;
+	}
+
+	assert(proc_is_runnable(rp));
+
+	if (priv(rp)->s_flags & BILLABLE)
+		get_cpulocal_var(bill_ptr) = rp; /* bill for system time */
+
+	return rp;
+  }
+
   return NULL;
 }
 
